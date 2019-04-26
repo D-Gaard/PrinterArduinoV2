@@ -21,6 +21,7 @@
 // -----------
 //
 //EM DEALAY 100 milisekunder 
+//Distance mellem tusch og scanner: 14-15steps med x
 
 //GLOBALE KONSTANTER
 //Digital porte 0-13
@@ -62,7 +63,7 @@ byte scanArray[(stepsX / 8) - 1][ stepsY - 1 ]; //array x skal også divideres m
 int start = 1;
 int teller = 0;
 int printDone = 0;
-
+String Storage;
 int a4y = 80; //#steps for y-aksen på papir
 int a4x = 30; //#steps fo y-aksen på papiret
 //overvej at teste stepper arrayet, og se om man kan steppe et step ad gangen
@@ -112,9 +113,46 @@ void loop() {
     // printAlt();
     start = 0;
     delay(3000);
-
   }
 
+  if (Serial.available() > 0) {
+	  Storage = Serial.readStringUntil(';');
+	  // Serial.println('1');
+
+	  //tjekker om komandoen modtaget matcher nogle kontroltermer
+	  if (Storage == "print") {
+		  Serial.println("print");
+		  printEM(120);
+	  }
+	  else if (Storage == "fx1") {
+		  Serial.println("step 1x frem");
+		  runMotorFrem('x', 20);
+	  }
+	  else if (Storage == "fy1") {
+		  Serial.println("step y1 frem");
+		  runMotorFrem('y', 40);
+	  }
+	  else if (Storage == "") {
+		  //der skal ikke ske noget
+	  }
+	  else if (Storage == "stop") {
+		  Serial.println("stop EM");
+		  digitalWrite(portEM, LOW);
+	  }
+	  else if (Storage == "start") {
+		  Serial.println("start EM");
+		  digitalWrite(portEM, HIGH);
+	  }
+
+	  else {
+		  Serial.println("Ukendt komando");
+	  }
+
+	  //Lukker serial, for at fjerne unødvidigt resterende output | .flush() havde ikke den ønskede effekt
+	  Serial.end();
+	  //åbner seriel, så beskeder igen kan modtages
+	  Serial.begin(9600);
+  }
   //  runMotorBagud('y', 30);
   //runMotorBagud('y', 30);
   //analogWrite(A1,0);
@@ -126,11 +164,8 @@ void loop() {
   */
 
  
-    tagScanning(); //scanner papiret
-    printAlt();    //printer arrayets værdier
-    delay(2000);   //pause
 
-  for (int n = 0; n < 6; n++) {
+ /* for (int n = 0; n < 6; n++) {
     //reset xakse motor
     runMotorBagud('y', 50);
   }
@@ -141,11 +176,7 @@ void loop() {
     printDone = 1;
     delay(2000);
 
-    //printet er done
-    while (printDone > 0) {
-    delay(7000);
-    Serial.println("I AM DONE :)");
-    }
+  
   /*
     for (int a=10;a<1000;a=a+10){
     analogWrite(A1,255);
