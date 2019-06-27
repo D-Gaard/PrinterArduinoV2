@@ -20,28 +20,22 @@
 //|           |S
 // -----------
 //
-//EM DEALAY 100 milisekunder 
+//EM DEALAY 100 milisekunder
 //Distance mellem tusch og scanner: 14-15steps med x
-//
-//
 //
 // Den del af papiret som vil blive tegnet på
 // 19   32   19
 // ------------
 //|   |    |   |
 //|   |    |   | 35
-//|---|----|---|          
-//|   |    |   | 
+//|---|----|---|
+//|   |    |   |
 //|   |    |   | 40
-//|---|----|---|          
-//|   |    |   | 
+//|---|----|---|
+//|   |    |   |
 //|   |    |   | 30
 // ------------
 //
-//
-//
-
-
 
 //GLOBALE KONSTANTER
 //Digital porte 0-13
@@ -62,13 +56,13 @@ const byte s2y = 1; //2
 const byte s3y = 2; //3
 const byte s4y = 3; //4
 
-const byte s1x = 5; //6
-const byte s2x = 4; //5
-const byte s3x = 7; //8
-const byte s4x = 6; //7
+const byte s1x = 5; //2
+const byte s2x = 4; //1
+const byte s3x = 7; //4
+const byte s4x = 6; //3
 
-//scanning
-const int shLimit = 648; //Grænse for hvornår farven er sort/hvid | over -> sort - under ->hvid
+//print
+const int printDelay = 120;
 
 //størrelse af scannerArray
 const int stepsX = 32;//skal kunne divideres med 8
@@ -81,25 +75,64 @@ int papirScanX = 32; //#steps for x ved scan
 int papirScanY = 40; //#steps for y ved scan
 
 //GLOBALE VARIABLE
+//scanning
+int shLimit = 751; //Grænse for hvornår farven er sort/hvid | over -> sort - under ->hvid
+
 //Array
-byte scanArray[(stepsX / 8) - 1][stepsY - 1]; //(der trækkes en fra da 0 tæller med og x divideres med 8 pga. der er 8 1/0 i en byte) | Der anvendes ikke boolean, da den fylder en byte i kompileren 
-//Serial
+//Scanner array - (x divideres med 8 pga. der er 8 1/0 i en byte) | Der anvendes ikke boolean, da den fylder en byte i kompileren | Arrayet fyldes med en figur til at starte med
+byte scanArray[stepsY][(stepsX / 8)]{
+  {0, 0, 0, 0},
+  {255, 255, 255, 255},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {191, 0, 0, 253},
+  {191, 0, 0, 253},
+  {191, 0, 0, 253},
+  {191, 0, 0, 253},
+  {191, 0, 0, 253},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {143, 0, 0, 241},
+  {143, 0, 0, 241},
+  {143, 0, 0, 241},
+  {143, 255, 255, 241},
+  {143, 255, 255, 241},
+  {143, 255, 255, 241},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {128, 0, 0, 1},
+  {255, 255, 255, 255},
+  {0, 0, 0, 0},
+  {128, 65, 65, 1},
+  {128, 99, 99, 1},
+  {128, 85, 85, 1},
+  {128, 73, 73, 1},
+  {128, 65, 65, 1}
+};
+
+//Serial monitor
 String Storage;
-//-----------------------------------------------------------------
 
-//TEST VÆRDIER SOM SKAL FJERNES VED ENDELIGE VERSION
+//--------------Kode-------------------
 
-
-
-int a4y = 80; //#steps for y-aksen på papir
-int a4x = 30; //#steps fo y-aksen på papiret
-
-//overvej at teste stepper arrayet, og se om man kan steppe et step ad gangen
 
 //*************************************
 //Navn: steup
 //Formål: Initialiser porte og klargør system
-//Af: Mads Daugaard | April-Maj - 2019
+//Af: Mads Daugaard | April - 2019
 //*************************************
 void setup() {
 	//pinModes digital 0-13
@@ -115,96 +148,102 @@ void setup() {
 	pinMode(A1, OUTPUT); //A1
 
 	//serial
-	Serial.begin(9600);
+	Serial.begin(9600); //starter seriel monitor
 
 	//nulstilling / nødvendig opsætning
-	digitalWrite(portD, HIGH); //tænder 4051 diasble port for at forhindre alle outputs i at modtage strøm
-	//analogWrite(portEM, 255); //trækker tuschen op
+	digitalWrite(portD, HIGH); //tænder 4051 diasble port for at forhindre outputs i at modtage strøm
+	analogWrite(portEM, 255); //trækker tuschen op
+	digitalWrite(LED1, HIGH); //tænder LED 1
+	digitalWrite(LED2, HIGH); //tænder LED 2
 
-	//test setups
-	analogWrite(A1, 255);
-	digitalWrite(6, HIGH);
-	digitalWrite(7, HIGH);
-	int xpapir = 0;
 }
 
 //*************************************
 //Navn: loop
 //Formål: Styrer hele programmet og looper
-//Af: Mads Daugaard | April-Maj - 2019
+//Af: Mads Daugaard | April - 2019
 //*************************************
 
 void loop() {
-
+	//tjekker om der sendes noget til seriel
 	if (Serial.available() > 0) {
-		Storage = Serial.readStringUntil(';');
-		// Serial.println('1');
+		//der er inkomende information (seriel er aktiv)
+		Storage = Serial.readStringUntil(';'); //læser data indtil ; fremkommer
 
 		//tjekker om komandoen modtaget matcher nogle kontroltermer
-		if (Storage == "print") {
+		if (Storage == "testPrint") {
+			//tester print funktion
 			Serial.println("print");
-			printEM(120);
+			printEM(printDelay);
 		}
-	
 		else if (Storage == "printPK") {
-Serial.println("Tegner Papirsets kant");
-tegnPapirKant();
-Serial.println("Papirets kant er tegnet");
+			//Printer en kant rundt på papiret hvor der kan printes og scannes
+			Serial.println("Tegner Papirsets kant");
+			tegnPapirKant();
+			Serial.println("Papirets kant er tegnet");
 		}
 		else if (Storage == "printSK") {
-		Serial.println("Tegner Scaningens kant");
-		tegnScaningKant(papirScanX, papirScanY);
-		Serial.println("Kanten er tegnet");
+			//printer kanten af den indre firkant som er størrelse der bruges  
+			Serial.println("Tegner Scaningens kant");
+			tegnScaningKant(papirScanX, papirScanY);
+			Serial.println("Kanten er tegnet");
 		}
 		else if (Storage == "scan") {
-		Serial.println("Scanner Papir");
-		scanFelt();
-		Serial.println("Scanning færdig");
+			//Scanner et område
+			Serial.println("Scanner Papir");
+			scanFelt();
+			Serial.println("Scanning færdig");
 		}
 		else if (Storage == "printScan") {
-		Serial.println("printerScanning");
-		printFelt();
-		Serial.println("Print Færdig");
+			//printer det scannede område
+			Serial.println("printerScanning");
+			printFelt();
+			Serial.println("Print Færdig");
+		}
+		else if (Storage == "limitL") {
+			//indstiller scanner niveau til Lav
+			Serial.println("Limit 745");
+			shLimit = 745;
+		}
+		else if (Storage == "limitM") {
+			//indstiller scanner niveau til Middel
+			Serial.println("Limit 745");
+			shLimit = 751;
+		}
+		else if (Storage == "limitH") {
+			//indstiller scanner niveau til Høj
+			Serial.println("Limit 745");
+			shLimit = 755;
+		}
+		else if (Storage == "lysOn") {
+			//tænder LED'er
+			Serial.println("Tænder lys");
+			digitalWrite(LED1, HIGH);
+			digitalWrite(LED2, HIGH);
+		}
+		else if (Storage == "lysOff") {
+			//slukker LED'er
+			Serial.println("Slukker lys");
+			digitalWrite(LED1, LOW);
+			digitalWrite(LED2, LOW);
 		}
 		else if (Storage == "fx1") {
-		Serial.println("step 1x frem");
-		runMotorFrem('x', 20);
-		}
-		else if (Storage == "fx10") {
-		Serial.println("step 10x frem");
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
-		runMotorFrem('x', 20);
+			//stepper 1 step med x
+			Serial.println("step 1x frem");
+			runMotorFrem('x', 20);
 		}
 		else if (Storage == "fy1") {
-		Serial.println("step y1 frem");
-		runMotorFrem('y', 40);
-		}
-		else if (Storage == "fy10") {
-		Serial.println("step 10y frem");
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
-		runMotorFrem('y', 40);
+			//stepper 1 step med y
+			Serial.println("step y1 frem");
+			runMotorFrem('y', 40);
 		}
 		else if (Storage == "scan1") {
-		Serial.println("Scan");
-		Serial.println(analogRead(A0));
+			//viser en scan måling
+			Serial.println("Scan");
+			Serial.println(analogRead(A0));
 		}
 		else if (Storage == "scan1L") {
+			//scanner en linje
 			Serial.println("Scan");
 			for (int n = 0; n < 70; n++) {
 				runMotorFrem('x', 20);
@@ -212,20 +251,24 @@ Serial.println("Papirets kant er tegnet");
 			}
 			resetMotor(70, 0);
 		}
-		else if (Storage == "stop") {
-		Serial.println("stop EM");
-		analogWrite(portEM, 0);
+		else if (Storage == "stopEM") {
+			//slukker for tusch
+			Serial.println("stop EM");
+			analogWrite(portEM, 0);
 		}
-		else if (Storage == "start") {
-		Serial.println("start EM");
-		analogWrite(portEM, 255);
+		else if (Storage == "startEM") {
+			//tænder for tusch
+			Serial.println("start EM");
+			analogWrite(portEM, 255);
 		}
 		else if (Storage == "visScan") {
+			//viser scannet i seriel monitoren
 			Serial.println("viser scanning: ");
 			printAlt();
 		}
 		else {
-		Serial.println("Ukendt komando");
+			//fortæller brugeren at der er skrevet forkert
+			Serial.println("Ukendt komando");
 		}
 
 		//Lukker serial, for at fjerne unødvidigt resterende output | .flush() havde ikke den ønskede effekt
@@ -234,41 +277,36 @@ Serial.println("Papirets kant er tegnet");
 		Serial.begin(9600);
 	}
 
-
-
-	/* for (int n = 0; n < 6; n++) {
-	   //reset xakse motor
-	   runMotorBagud('y', 50);
-	 }
-	   //resetMotor(stepsX, stepsY); //sender motoren tilbage til start
-	   delay(12000); //12 sekunder til at udskifte papir
-	   printArray();  //printer den tidligere scanning
-	   printAlt();   //printer arrayets værdier, burde være [0000-0000]
-	   printDone = 1;
-	   delay(2000);
-
-
-	 /*
-	   for (int a=10;a<1000;a=a+10){
-	   analogWrite(A1,255);
-	   delay(a);
-	   analogWrite(A1,0);
-	   delay(1000);
-	   Serial.println(a);
-	   }
-	 */
 }
-void scanFelt(){
-	papirSetup(19-14, 30); //kører motoren til det højre nederste hjørne
+//*************************************
+//Navn: scanFelt
+//Formål: Scanner et område og gemmer det
+//Af: Mads Daugaard | April - 2019
+//*************************************
+void scanFelt() {
+	papirSetup(19 - 14, 30); //kører motoren til det højre nederste hjørne
+	Serial.println("start");
 	tagScanning(); //scanner papiret
-	resetMotor(19-14, 70); //resetter motor til start pos
+	Serial.println("retur");
+	resetMotor(19 - 14, 70 - 5); //resetter motor til start pos
+	Serial.println("done");
 }
+//*************************************
+//Navn: printFelt
+//Formål: printer det sidste scan på papiret
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void printFelt() {
 	papirSetup(19, 30); //kører motoren til det højre nederste hjørne
-	printArray();
+	printArray();       //printer motiv
 	resetMotor(19, 70); //resetter motor til start pos
 }
 
+//*************************************
+//Navn: papirSetup
+//Formål: Kører motoren i startposition
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void papirSetup(int motorXStartPos, int motorYStartPos) {
 	//kør motoren på x-aksen i position
 	for (int n = 0; n < motorXStartPos; n++) {
@@ -280,18 +318,28 @@ void papirSetup(int motorXStartPos, int motorYStartPos) {
 	}
 }
 
+//*************************************
+//Navn: farveScan
+//Formål: Scaner A0 og returnere om det er sort eller hvid 
+//Af: Mads Daugaard | April - 2019
+//*************************************
 byte farveScan() {
 	//undersøger fraven ud fra en scanning på en analogport
 	if (analogRead(portSensor) > shLimit) {
 		//den er sort (1)
 		return 1;
 	}
-		else {
+	else {
 		//den er hvid (0)
 		return 0;
 	}
 }
 
+//*************************************
+//Navn: tagScanning
+//Formål: Scanner et område på papiret
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void tagScanning() {
 	//looper gennem hele arrayet
 	for (int y = 0; y < stepsY; y++) {
@@ -302,40 +350,50 @@ void tagScanning() {
 				//alle 8 pladser i en byte
 				if (counter == 0) {
 					//der står intet på pladsen, så den er bare ligmed 0/1 | dette sørger samtidigt for at initialisere pladsen
-					scanArray[x][y] = farveScan();
+					scanArray[y][x] = farveScan();
 				}
 				else {
-					//der står mere i arrayet, derfor skal alt rykkes mod venstre 1 og indsættes 1/0 på den højre mest plads
-					byte a = scanArray[x][y];
-					byte b = (a << 1);
-					scanArray[x][y] = (farveScan() | b);
+					//der står mere i arrayet, derfor skal alt rykkes 1 mod venstre og indsættes 1/0 på den højre mest plads
+					byte a = scanArray[y][x]; //gemmer værdi fra array
+
+					byte b = (a << 1); //shifter værdi og gemmer denne
+					scanArray[y][x] = (farveScan() | b); //sammenligner med "or" og gemmer den nye streng
 
 				}
 				//stepper næste step med motorn på x-aske
-				runMotorFrem('x', 40);
+				runMotorFrem('x', 20);
+				delay(60); //delay for mere tid mellem hert scan -> bedre kvalitet
 			}
 		}
 		//stepper næste stepå på y-aksen
-		runMotorFrem('y', 60);
+		runMotorFrem('y', 40);
 
 		//run x tilbage til "start"
 		for (int n = 0; n < stepsX; n++) {
-			runMotorBagud('x', 25);
+			runMotorBagud('x', 20); //køre motoren tilbage på x-aksen
 		}
 
 	}
 }
 
+//*************************************
+//Navn: printEM
+//Formål: laver en prik på papiret
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void printEM(int delays) {
-	//laver et print
 	//dropper tuschen
 	analogWrite(portEM, 0);
-	delay(delays);
+	delay(delays * 2);
 	//trækker den op igen
 	analogWrite(portEM, 255);
 	delay(delays);
 }
-
+//*************************************
+//Navn: printArray
+//Formål: printer hvad der er blevet scannet
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void printArray() {
 	//looper gennem hele arrayet
 	for (int y = 0; y < stepsY; y++) {
@@ -344,20 +402,20 @@ void printArray() {
 			//xaksen
 			for (byte counter = 0; counter <= 7; counter++) {
 				//alle 8 pladser i en byte (8 steps på x-aksen)
-				if (scanArray[x][y] % 2 != 0) {
-					//tallet er ikke lige og derfor står der 1 på den sidste plads i arrayey
-					printEM(120);
+				if (scanArray[y][x] > 127) {
+					//tallet er større end 127 ergo står der 1 på den første plads i byten, og der skal printes
+					printEM(printDelay);
 				}
 				//shifter mod venstre for at få den næste værdi frem
-				byte a = scanArray[x][y];
-				scanArray[x][y] = a >> 1;
+				byte a = scanArray[y][x];
+				scanArray[y][x] = a << 1;
 
 				//stepper næste step med motorn
-				runMotorFrem('x', 40);
+				runMotorFrem('x', 25);
 			}
 		}
 		//stepper næste stepå på y-aksen
-		runMotorFrem('y', 60);
+		runMotorFrem('y', 40);
 
 		//run x tilbage til "start"
 		for (int n = 0; n < stepsX; n++) {
@@ -366,6 +424,11 @@ void printArray() {
 	}
 }
 
+//*************************************
+//Navn: tegnScaningKant
+//Formål: Tegner en kant hvor der vil blive scannet
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void tegnScaningKant(int stepsX, int stepsY) {
 
 	//tegner en kant for det område på papiret som vil blive scannet
@@ -376,59 +439,69 @@ void tegnScaningKant(int stepsX, int stepsY) {
 		//stepper x-aksen
 		runMotorFrem('x', 20);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 
 	for (int n = 0; n < stepsY; n++) {
 		//stepper y-aksen
 		runMotorFrem('y', 40);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 	for (int n = 0; n < stepsX; n++) {
 		//stepper x-aksen
 		runMotorBagud('x', 20);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 
 	for (int n = 0; n < stepsY; n++) {
 		//stepper y-aksen
 		runMotorBagud('y', 40);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 }
+
+//*************************************
+//Navn: tegnPapirKant
+//Formål: Tegner en kant langs papirets ydre
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void tegnPapirKant() {
 	//stepper lang hele papirets kant og printer en gang pr. sted
 	for (int n = 0; n < papirX; n++) {
 		//stepper x-aksen
 		runMotorFrem('x', 20);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 
 	for (int n = 0; n < papirY; n++) {
 		//stepper y-aksen
 		runMotorFrem('y', 40);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 	for (int n = 0; n < papirX; n++) {
 		//stepper x-aksen
 		runMotorBagud('x', 20);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 
 	for (int n = 0; n < papirY; n++) {
 		//stepper y-aksen
 		runMotorBagud('y', 40);
 		//printer en gang efter hvert step
-		printEM(220);
+		printEM(printDelay);
 	}
 }
-
+//*************************************
+//Navn: runMotorFrem
+//Formål: Kører en mortor 1 step fremad
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void runMotorFrem(char akse, int delays) {
 	//tænder for 4051
 	digitalWrite(portD, LOW);
@@ -438,19 +511,15 @@ void runMotorFrem(char akse, int delays) {
 	if (akse == 'x') {
 		//run motor fremad x aksen
 		sandKonv(s1x);
-		//Serial.println("1");
 		delay(delays);
 
 		sandKonv(s2x);
-		//Serial.println("2");
 		delay(delays);
 
 		sandKonv(s3x);
-		//Serial.println("3");
 		delay(delays);
 
 		sandKonv(s4x);
-		//Serial.println("4");
 		delay(delays);
 
 	}
@@ -458,19 +527,15 @@ void runMotorFrem(char akse, int delays) {
 	if (akse == 'y') {
 		//run motor fremad y aksen
 		sandKonv(s1y);
-		//Serial.println("1");
 		delay(delays);
 
 		sandKonv(s2y);
-		//Serial.println("2");
 		delay(delays);
 
 		sandKonv(s3y);
-		//Serial.println("3");
 		delay(delays);
 
 		sandKonv(s4y);
-		//Serial.println("4");
 		delay(delays);
 	}
 
@@ -478,6 +543,11 @@ void runMotorFrem(char akse, int delays) {
 	digitalWrite(portD, HIGH);
 }
 
+//*************************************
+//Navn: runMotorBagud
+//Formål: Kører en mortor 1 step bagud
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void runMotorBagud(char akse, int delays) {
 	//tænder for 4051
 	digitalWrite(portD, LOW);
@@ -486,37 +556,29 @@ void runMotorBagud(char akse, int delays) {
 	//kører den givne stepper ud fra input "akse"
 	if (akse == 'x') {
 		sandKonv(s4x);
-		//  Serial.println("4");
 		delay(delays);
 
 		sandKonv(s3x);
-		//Serial.println("3");
 		delay(delays);
 
 		sandKonv(s2x);
-		//Serial.println("2");
 		delay(delays);
 
 		sandKonv(s1x);
-		//Serial.println("1");
 		delay(delays);
 
 	}
 	else if (akse == 'y') {
 		sandKonv(s4y);
-		//Serial.println("4");
 		delay(delays);
 
 		sandKonv(s3y);
-		//Serial.println("3");
 		delay(delays);
 
 		sandKonv(s2y);
-		//Serial.println("2");
 		delay(delays);
 
 		sandKonv(s1y);
-		//  Serial.println("1");
 		delay(delays);
 	}
 
@@ -524,6 +586,11 @@ void runMotorBagud(char akse, int delays) {
 	digitalWrite(portD, HIGH);
 }
 
+//*************************************
+//Navn: resetMotor
+//Formål: Kører printerhovedet tilbage til en position
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void resetMotor(int xsteps, int ysteps) {
 	//reset motor
 	for (int n = 0; n < xsteps; n++) {
@@ -536,7 +603,11 @@ void resetMotor(int xsteps, int ysteps) {
 		runMotorBagud('y', 40);
 	}
 }
-
+//*************************************
+//Navn: sandKonv
+//Formål: Konverter en værdi fra 0-7 til den tilsvarende ben på 4051
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void sandKonv(int value) {
 	//opsætter variable
 	byte valA = 0;
@@ -615,29 +686,27 @@ void sandKonv(int value) {
 	digitalWrite(portC, valC);
 }
 
-//***************************************************************TEST / KONTROL***************************************************************
+//*************************************
+//Navn: printAlt
+//Formål: printer hele arayet til seriel monitor
+//Af: Mads Daugaard | April - 2019
+//*************************************
 void printAlt() {
 	for (int y = 0; y < stepsY; y++) {
 		//yaksen
 		for (int x = 0; x < stepsX / 8; x++) {
 			//xaksen
-			if (scanArray[x][y] == 0) {
-				//print 0 nuller for at vise værdien binært
-				Serial.print("0");
-				Serial.print("0");
-				Serial.print("0");
-				Serial.print("0");
-				Serial.print("0");
-				Serial.print("0");
-				Serial.print("0");
-				Serial.print("0");
+
+			byte val = scanArray[y][x]; //gemmer en byte fra arrayet
+			for (int i = 7; i >= 0; i--)
+			{
+				bool b = bitRead(val, i); //læser hver enkelt værdi fra en byte
+				Serial.print(b); //printer hver bit
 			}
-			else			{
-				Serial.print(scanArray[x][y], BIN);
-				Serial.print(" ");
-			}
-		
-					}
-		Serial.println("");
+
+			Serial.print(" "); //laver et mellemrum mellem hver byte
+
+		}
+		Serial.println(""); //laver et linje skift mellem hver række
 	}
 }
